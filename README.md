@@ -96,3 +96,21 @@ Sau khi có file binary `kafka_2.13-4.4.0.tgz` (từ bước build Gradle hoặc
 cd "D:\12. VNPT-IT\OpenSource\kafka-4.4.0-apache-official-source\apache-kafka-4.4.0\docker\jvm"
 docker build -t local/kafka:4.4.0 --build-arg kafka_url="https://downloads.apache.org/kafka/4.4.0/kafka_2.13-4.4.0.tgz" .
 ```
+
+## 5. Bản vá bảo mật (Trivy CVE fixes)
+
+Source này đã được vá so với upstream tag `4.4.0` để xử lý toàn bộ CVE mà Trivy `v0.76.2` tìm thấy trên image `apache/kafka:4.4.0` (31 CVE: 1 CRITICAL, 10 HIGH, 19 MEDIUM, 1 LOW). Mỗi mốc là một commit riêng, đều đã build lại image và smoke test (KRaft produce/consume) trước khi commit:
+
+| Commit | Thay đổi | CVE xử lý |
+| :--- | :--- | :--- |
+| `b7f579b` | Pin digest `eclipse-temurin:25-jre-alpine@sha256:e1898fd6...` trong `docker/jvm/Dockerfile` (Alpine `3.24.4`) | 25 CVE lớp OS (1 CRITICAL, 7 HIGH, 17 MEDIUM) |
+| `0960672` | `lz4-java` `1.11.2` → `1.11.4` (`gradle/dependencies.gradle`, `LICENSE-binary`) | 3 CVE (1 HIGH, 1 MEDIUM, 1 LOW) |
+| `ca6fe42` | `snappy-java` `1.1.10.7` → `1.1.10.9` (`gradle/dependencies.gradle`, `LICENSE-binary`) | 3 CVE (2 HIGH, 1 MEDIUM) |
+
+Kết quả quét cuối cùng trên image build từ source đã vá: **0 CVE** (CRITICAL/HIGH/MEDIUM/LOW) ở cả lớp OS Alpine và toàn bộ JAR trong `/opt/kafka/libs/`.
+
+### Lưu ý khi build từ source đã vá
+
+- Build image bằng `docker/jvm/Dockerfile` với tham số `--build-arg kafka_url=...` sẽ tải bản `kafka.tgz` gốc của Apache (vẫn còn `lz4-java 1.11.2` / `snappy-java 1.1.10.7`). Để có bản đã vá, phải build `releaseTarGz` từ source này rồi đưa file `.tgz` vào build context (không truyền `kafka_url`).
+- Nếu build trên Windows, cần chuẩn hóa `bin/*.sh` và `gradlew` sang line ending LF trước khi build, nếu không script sẽ lỗi `/bin/bash^M: bad interpreter`.
+- Dockerfile pin theo digest nên sẽ không tự nhận bản base image mới hơn; cần cập nhật digest định kỳ và quét lại Trivy.
